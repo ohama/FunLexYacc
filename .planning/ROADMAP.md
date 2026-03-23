@@ -31,12 +31,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. The test harness can run each of lexer, IndentFilter, and parser in isolation without the others being complete
   3. A rollback build target exists that restores the F# pipeline if generated output is substituted
   4. Project directory structure matches the intended src/ module layout with clear boundaries between funlex, funyacc, and IndentFilter
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: Project structure, module skeleton, build wiring
-- [ ] 01-02: Side-by-side comparison harness (token-level diff and AST diff)
-- [ ] 01-03: Per-component test runner and rollback target
+- [ ] 01-01-PLAN.md — src/ directory skeleton, valid .fun module stubs, tests/fixtures symlink, run.sh
+- [ ] 01-02-PLAN.md — compare.sh: single-command side-by-side comparison (tokens + AST, file + --expr mode)
+- [ ] 01-03-PLAN.md — run-isolated.sh (per-component passthrough runner) and rollback.sh (F# pipeline restore + baseline verify)
 
 ### Phase 2: IndentFilter
 **Goal**: IndentFilter.fun correctly transforms NEWLINE(col) tokens into INDENT/DEDENT/IN tokens across all 7 syntax contexts, passing all relevant integration tests
