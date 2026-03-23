@@ -78,35 +78,35 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TEST-01 | — | Pending |
-| TEST-02 | — | Pending |
-| TEST-03 | — | Pending |
-| FLEX-01 | — | Pending |
-| FLEX-02 | — | Pending |
-| FLEX-03 | — | Pending |
-| FLEX-04 | — | Pending |
-| FLEX-05 | — | Pending |
-| FLEX-06 | — | Pending |
-| FYAC-01 | — | Pending |
-| FYAC-02 | — | Pending |
-| FYAC-03 | — | Pending |
-| FYAC-04 | — | Pending |
-| FYAC-05 | — | Pending |
-| IFLT-01 | — | Pending |
-| IFLT-02 | — | Pending |
-| IFLT-03 | — | Pending |
-| CGEN-01 | — | Pending |
-| CGEN-02 | — | Pending |
-| CGEN-03 | — | Pending |
-| BOOT-01 | — | Pending |
-| BOOT-02 | — | Pending |
-| BOOT-03 | — | Pending |
+| TEST-01 | Phase 1 | Pending |
+| TEST-02 | Phase 7 | Pending |
+| TEST-03 | Phase 1 | Pending |
+| FLEX-01 | Phase 3 | Pending |
+| FLEX-02 | Phase 3 | Pending |
+| FLEX-03 | Phase 3 | Pending |
+| FLEX-04 | Phase 3 | Pending |
+| FLEX-05 | Phase 3 | Pending |
+| FLEX-06 | Phase 3 | Pending |
+| FYAC-01 | Phase 4 | Pending |
+| FYAC-02 | Phase 5 | Pending |
+| FYAC-03 | Phase 5 | Pending |
+| FYAC-04 | Phase 5 | Pending |
+| FYAC-05 | Phase 6 | Pending |
+| IFLT-01 | Phase 2 | Pending |
+| IFLT-02 | Phase 2 | Pending |
+| IFLT-03 | Phase 2 | Pending |
+| CGEN-01 | Phase 3 | Pending |
+| CGEN-02 | Phase 6 | Pending |
+| CGEN-03 | Phase 6 | Pending |
+| BOOT-01 | Phase 7 | Pending |
+| BOOT-02 | Phase 7 | Pending |
+| BOOT-03 | Phase 7 | Pending |
 
 **Coverage:**
 - v1 requirements: 23 total
-- Mapped to phases: 0
-- Unmapped: 23 ⚠️
+- Mapped to phases: 23
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-23*
-*Last updated: 2026-03-23 after initial definition*
+*Last updated: 2026-03-23 after roadmap creation*
