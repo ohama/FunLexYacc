@@ -8,13 +8,13 @@
 
 ### System Overview
 
-The full pipeline — from .fsl/.fsy specification files to a running LangThree compiler — has three distinct layers:
+The full pipeline — from .funl/.funy specification files to a running LangThree compiler — has three distinct layers:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                      SPECIFICATION LAYER                            │
 │  ┌─────────────┐          ┌─────────────┐      ┌───────────────┐   │
-│  │  Lexer.fsl  │          │  Parser.fsy │      │  (embedded    │   │
+│  │  Lexer.funl  │          │  Parser.funy │      │  (embedded    │   │
 │  │ (lex rules) │          │ (grammar)   │      │   .fun code)  │   │
 │  └──────┬──────┘          └──────┬──────┘      └───────────────┘   │
 └─────────┼───────────────────────┼─────────────────────────────────┘
@@ -25,8 +25,8 @@ The full pipeline — from .fsl/.fsy specification files to a running LangThree 
 │  ┌──────────────────────┐    ┌──────────────────────────────────┐  │
 │  │       funlex         │    │            funyacc               │  │
 │  │                      │    │                                  │  │
-│  │  FslParser (F# DSL   │    │  FsyParser (F# DSL parser)       │  │
-│  │   parser for .fsl)   │    │  LALR(1) Table Builder           │  │
+│  │  FunlParser (F# DSL   │    │  FunyParser (F# DSL parser)       │  │
+│  │   parser for .funl)   │    │  LALR(1) Table Builder           │  │
 │  │  NFA Builder         │    │  Grammar Conflict Resolver       │  │
 │  │  DFA Minimizer       │    │  Code Emitter                    │  │
 │  │  Code Emitter        │    │                                  │  │
@@ -51,12 +51,12 @@ The full pipeline — from .fsl/.fsy specification files to a running LangThree 
 
 | Component | Responsibility | Typical Implementation |
 |-----------|----------------|------------------------|
-| FslParser | Parse .fsl spec file into an in-memory lex rule AST | Hand-written recursive descent |
+| FunlParser | Parse .funl spec file into an in-memory lex rule AST | Hand-written recursive descent |
 | NFA Builder | Convert regex rules from the lex AST into NFA graph | Thompson's construction algorithm |
 | DFA Builder | Convert NFA to deterministic DFA | Subset construction |
 | DFA Minimizer | Minimize DFA state count | Hopcroft's algorithm (optional for v1) |
 | Lexer Code Emitter | Emit Lexer.fun from DFA transition table | Template string generation |
-| FsyParser | Parse .fsy spec file into a grammar AST | Hand-written recursive descent |
+| FunyParser | Parse .funy spec file into a grammar AST | Hand-written recursive descent |
 | Grammar Extractor | Extract terminals, nonterminals, productions, precedence rules | Walks grammar AST |
 | LALR(1) Table Builder | Build LR(0) items, compute LALR(1) lookahead sets, build action/goto tables | Classic Dragon Book algorithm |
 | Conflict Resolver | Resolve shift/reduce and reduce/reduce conflicts using precedence annotations | Precedence table lookup |
@@ -67,9 +67,9 @@ The full pipeline — from .fsl/.fsy specification files to a running LangThree 
 
 ```
 src/
-├── FslSpec/              # .fsl spec file representation
-│   ├── FslAst.fun        # AST: LexSpec, Rule, RegexExpr, Action
-│   └── FslParser.fun     # Parse .fsl → FslAst
+├── FunlSpec/              # .funl spec file representation
+│   ├── FunlAst.fun        # AST: LexSpec, Rule, RegexExpr, Action
+│   └── FunlParser.fun     # Parse .funl → FunlAst
 ├── Nfa/                  # NFA construction from lex rules
 │   ├── NfaTypes.fun      # NfaState, NfaEdge, NfaGraph
 │   └── NfaBuild.fun      # Thompson's construction
@@ -78,9 +78,9 @@ src/
 │   └── DfaBuild.fun      # Subset construction + minimization
 ├── FunLex/               # funlex top-level
 │   └── LexEmit.fun       # Emit Lexer.fun from DFA
-├── FsySpec/              # .fsy spec file representation
-│   ├── FsyAst.fun        # Grammar, Production, Precedence, Action
-│   └── FsyParser.fun     # Parse .fsy → FsyAst
+├── FunySpec/              # .funy spec file representation
+│   ├── FunyAst.fun        # Grammar, Production, Precedence, Action
+│   └── FunyParser.fun     # Parse .funy → FunyAst
 ├── Lalr/                 # LALR(1) table construction
 │   ├── LrItems.fun       # LR(0) item sets, closure, goto
 │   ├── Lookahead.fun     # LALR(1) lookahead propagation
@@ -94,9 +94,9 @@ src/
 
 ### Structure Rationale
 
-- **FslSpec/ and FsySpec/ are separate:** The input formats are distinct domain languages. Keeping their ASTs and parsers isolated prevents coupling and allows either to evolve independently.
+- **FunlSpec/ and FunySpec/ are separate:** The input formats are distinct domain languages. Keeping their ASTs and parsers isolated prevents coupling and allows either to evolve independently.
 - **Nfa/ and Dfa/ are separate:** The NFA→DFA pipeline is a two-stage transformation. Keeping them separate makes each stage testable in isolation.
-- **Lalr/ is isolated from FsySpec/:** Grammar analysis (LALR tables) should not depend on the surface syntax of .fsy files. FsyParser produces a normalized grammar representation that Lalr/ operates on.
+- **Lalr/ is isolated from FunySpec/:** Grammar analysis (LALR tables) should not depend on the surface syntax of .funy files. FunyParser produces a normalized grammar representation that Lalr/ operates on.
 - **IndentFilter/ is standalone:** It must be usable independently of funlex/funyacc output. It is a pure runtime filter, not a generator component.
 - **Emitters are separate from builders:** LexEmit and ParserEmit concern string generation. Keeping them separate from the automata logic means algorithm correctness is testable without checking string output.
 
@@ -104,15 +104,15 @@ src/
 
 ### Pattern 1: Two-Phase Spec Parsing
 
-**What:** Each specification format (.fsl, .fsy) is parsed by a dedicated hand-written recursive descent parser that produces a typed AST. The AST is then separately processed by the automaton or grammar builder.
+**What:** Each specification format (.funl, .funy) is parsed by a dedicated hand-written recursive descent parser that produces a typed AST. The AST is then separately processed by the automaton or grammar builder.
 
 **When to use:** Always — separating parsing from analysis is the foundation of composability.
 
-**Trade-offs:** Requires writing two parsers (one for .fsl, one for .fsy), but gives clean boundaries between "what the user wrote" and "what the generator does with it."
+**Trade-offs:** Requires writing two parsers (one for .funl, one for .funy), but gives clean boundaries between "what the user wrote" and "what the generator does with it."
 
 **Example (.fun pseudocode):**
 ```
-// FslParser produces this AST
+// FunlParser produces this AST
 type LexSpec =
   | LexSpec of header: string * rules: LexRule list * footer: string
 
@@ -222,10 +222,10 @@ type FilterState = {
 ### funlex Data Flow
 
 ```
-.fsl file (string)
+.funl file (string)
     │
-    ▼ FslParser
-FslAst (LexSpec)
+    ▼ FunlParser
+FunlAst (LexSpec)
     │
     ▼ NfaBuild (Thompson's construction per rule)
 NfaGraph (states × edges × accepting predicates)
@@ -240,10 +240,10 @@ Lexer.fun (string written to disk)
 ### funyacc Data Flow
 
 ```
-.fsy file (string)
+.funy file (string)
     │
-    ▼ FsyParser
-FsyAst (Grammar: terminals, nonterminals, productions, precedence, header/footer)
+    ▼ FunyParser
+FunyAst (Grammar: terminals, nonterminals, productions, precedence, header/footer)
     │
     ▼ LrItems (LR(0) item set construction + closure)
 LR(0) item sets (states × kernel items × closure items)
@@ -295,23 +295,23 @@ Phase 1: IndentFilter.fun
     — No dependencies on funlex/funyacc. Testable immediately.
     — Port of IndentFilter.fs, pure list transformation.
 
-Phase 2: FslParser + FslAst (funlex input parsing)
+Phase 2: FunlParser + FunlAst (funlex input parsing)
     — Depends only on LangThree itself (string processing, ADTs).
-    — Can be tested by parsing Lexer.fsl and printing the AST.
+    — Can be tested by parsing Lexer.funl and printing the AST.
 
 Phase 3: NFA Builder + DFA Builder (funlex automaton)
-    — Depends on FslAst. No external dependencies.
+    — Depends on FunlAst. No external dependencies.
     — Test by verifying DFA tables for small regex sets.
 
 Phase 4: LexEmit (funlex output)
     — Depends on DfaTable. Produces Lexer.fun.
     — Integration test: run generated Lexer.fun on LangThree source.
 
-Phase 5: FsyParser + FsyAst (funyacc input parsing)
-    — Depends only on LangThree. Can parse Parser.fsy, print grammar.
+Phase 5: FunyParser + FunyAst (funyacc input parsing)
+    — Depends only on LangThree. Can parse Parser.funy, print grammar.
 
 Phase 6: LrItems + Lookahead (funyacc LALR construction)
-    — Depends on FsyAst. Core algorithm, testable with toy grammars.
+    — Depends on FunyAst. Core algorithm, testable with toy grammars.
 
 Phase 7: Tables + Conflict Resolution (funyacc table generation)
     — Depends on Lookahead. Test by comparing tables against fsyacc output.
@@ -341,7 +341,7 @@ Phase 9: End-to-end bootstrap validation
 
 **Why it's wrong:** During development, the generated Lexer.fun and Parser.fun will need manual inspection to diagnose bugs. Unreadable output makes this impossible. fsyacc's `Parser.fs` is already 3,389 lines of densely packed arrays — tolerable in a binary artifact, but not in a tool we need to debug.
 
-**Do this instead:** Structure generated output with one state per line, named constants for special sentinel values, and comments that reference the original .fsl/.fsy line numbers.
+**Do this instead:** Structure generated output with one state per line, named constants for special sentinel values, and comments that reference the original .funl/.funy line numbers.
 
 ### Anti-Pattern 3: Encoding IndentFilter Logic in the Generated Lexer
 
@@ -361,11 +361,11 @@ Phase 9: End-to-end bootstrap validation
 
 ### Anti-Pattern 5: Skipping Grammar Normalization
 
-**What people do:** Feed the raw .fsy grammar directly into LR item construction without normalizing it first (augmenting with a start production, resolving %token/%left/%right declarations into a precedence table).
+**What people do:** Feed the raw .funy grammar directly into LR item construction without normalizing it first (augmenting with a start production, resolving %token/%left/%right declarations into a precedence table).
 
 **Why it's wrong:** LALR construction requires a specific normalized form. Without augmentation with a fresh start production, the accept condition is undefined. Without a precedence table, all shift/reduce conflicts produce errors.
 
-**Do this instead:** FsyParser produces a raw FsyAst. A separate normalization step (inside the Tables phase) augments the grammar and builds the precedence map before LALR construction begins.
+**Do this instead:** FunyParser produces a raw FunyAst. A separate normalization step (inside the Tables phase) augments the grammar and builds the precedence map before LALR construction begins.
 
 ## Integration Points
 
@@ -373,10 +373,10 @@ Phase 9: End-to-end bootstrap validation
 
 | Boundary | Communication | Notes |
 |----------|---------------|-------|
-| FslParser → NfaBuild | FslAst.LexSpec (ADT) | Clean; NfaBuild knows nothing about .fsl syntax |
+| FunlParser → NfaBuild | FunlAst.LexSpec (ADT) | Clean; NfaBuild knows nothing about .funl syntax |
 | NfaBuild → DfaBuild | NfaTypes.NfaGraph (ADT) | Immutable; DfaBuild reads it, does not modify |
 | DfaBuild → LexEmit | DfaTypes.DfaTable (ADT) | LexEmit serializes this to text |
-| FsyParser → Tables | FsyAst.Grammar (ADT) | Grammar is normalized before table construction |
+| FunyParser → Tables | FunyAst.Grammar (ADT) | Grammar is normalized before table construction |
 | Tables → ParserEmit | LALR action/goto as int list list | ParserEmit serializes to LangThree list literals |
 | Lexer.fun → IndentFilter.fun | Token list | IndentFilter reads and produces Token list |
 | IndentFilter.fun → Parser.fun | Token list (as closure) | Parser wraps list in a tokenizer function |
@@ -385,8 +385,8 @@ Phase 9: End-to-end bootstrap validation
 
 | Interface | Direction | Notes |
 |-----------|-----------|-------|
-| .fsl file (text) | Input to funlex | Must handle full Lexer.fsl syntax |
-| .fsy file (text) | Input to funyacc | Must handle full Parser.fsy syntax |
+| .funl file (text) | Input to funlex | Must handle full Lexer.funl syntax |
+| .funy file (text) | Input to funyacc | Must handle full Parser.funy syntax |
 | Lexer.fun (text) | Output of funlex | Written to disk, then compiled by LangThree |
 | Parser.fun (text) | Output of funyacc | Written to disk, then compiled by LangThree |
 | IndentFilter.fun (text) | Shipped with FunLexYacc | Compiled into LangThree at bootstrap |
@@ -398,8 +398,8 @@ This is a bootstrapping tool, not a user-facing service. Scaling concerns are ir
 
 | Input Size | Concern | Approach |
 |------------|---------|----------|
-| LangThree's own Lexer.fsl (~170 lines) | NFA/DFA construction time | Straightforward; even naive subset construction finishes instantly |
-| LangThree's own Parser.fsy (~640 lines, ~150 productions) | LALR table construction time | The LALR algorithm for grammars of this size completes in under a second even in interpreted LangThree |
+| LangThree's own Lexer.funl (~170 lines) | NFA/DFA construction time | Straightforward; even naive subset construction finishes instantly |
+| LangThree's own Parser.funy (~640 lines, ~150 productions) | LALR table construction time | The LALR algorithm for grammars of this size completes in under a second even in interpreted LangThree |
 | Generated Parser.fun | File size | fsyacc's Parser.fs is 3,389 lines; our output will be comparable |
 
 DFA minimization (Hopcroft's algorithm) is optional for v1 — the unminimized DFA for a grammar-sized lexer will have at most a few hundred states.
@@ -407,8 +407,8 @@ DFA minimization (Hopcroft's algorithm) is optional for v1 — the unminimized D
 ## Sources
 
 - LangThree source code: `/Users/ohama/vibe-coding/LangThree/src/LangThree/`
-  - `Lexer.fsl` — fslex input format, DFA rule structure
-  - `Parser.fsy` — fsyacc grammar format, precedence declarations, semantic actions
+  - `Lexer.funl` — fslex input format, DFA rule structure
+  - `Parser.funy` — fsyacc grammar format, precedence declarations, semantic actions
   - `Parser.fs` — generated parser structure: token ADT, tag functions, action/goto tables, `_fsyacc_reductions` array, `tables` record, `engine`/`parseModule`/`start` entry points
   - `IndentFilter.fs` — FilterState ADT, context stack, processNewline, offside rule logic
   - `Program.fs` — pipeline wiring: lex → filter → parse → elaborate → typecheck → eval

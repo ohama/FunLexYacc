@@ -54,9 +54,9 @@ FunLexYacc/
 ├── src/
 │   ├── IndentFilter/
 │   │   └── IndentFilter.fun      # Phase 2 — empty skeleton in Phase 1
-│   ├── FslSpec/
+│   ├── FunlSpec/
 │   │   └── .gitkeep              # Phase 3 placeholder
-│   ├── FsySpec/
+│   ├── FunySpec/
 │   │   └── .gitkeep              # Phase 4 placeholder
 │   ├── Nfa/
 │   │   └── .gitkeep              # Phase 3 placeholder

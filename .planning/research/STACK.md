@@ -15,14 +15,14 @@
 | Thompson's NFA construction | classical (1968) | Regex-to-NFA in funlex | Compositional, easy to implement recursively in a functional language; each regex operator maps to a small NFA fragment |
 | Powerset/subset construction | classical | NFA-to-DFA conversion in funlex | Standard algorithm with tractable worst case for token-level regexes; produces correct DFA for longest-match |
 | Hopcroft's partition refinement | classical (1971) | DFA minimization in funlex | O(n log n) in states × alphabet; reduces generated table size; practically essential for unicode lexers |
-| .fsl/.fsy format | FsLexYacc-compatible | Input grammar format | Non-negotiable constraint — existing LangThree Lexer.fsl and Parser.fsy must be consumed without modification |
+| .funl/.funy format | FsLexYacc-compatible | Input grammar format | Non-negotiable constraint — existing LangThree Lexer.funl and Parser.funy must be consumed without modification |
 | .fun module output | LangThree module system | Generated code format | Non-negotiable constraint — generated lexer/parser must integrate with LangThree's module system |
 
 ### Algorithm Pipeline: funlex
 
 ```
-.fsl file
-  → parse .fsl header, named regex bindings, rule entry points
+.funl file
+  → parse .funl header, named regex bindings, rule entry points
   → for each rule: build regex AST per pattern
   → Thompson's NFA construction per regex AST
   → compose all patterns into one NFA with ε-start-transitions
@@ -37,7 +37,7 @@
 ### Algorithm Pipeline: funyacc
 
 ```
-.fsy file
+.funy file
   → parse %token declarations, %type, %start, %left/%right/%nonassoc precedence
   → parse grammar productions with semantic actions
   → compute FIRST sets for all symbols
@@ -90,7 +90,7 @@ No external library dependencies. Both tools are pure algorithmic implementation
 
 | Tool | Purpose | Notes |
 |------|---------|-------|
-| Existing fslex/fsyacc | Bootstrap phase 0 — compile the .fsl/.fsy inputs for funlex/funyacc themselves | You need fslex/fsyacc to parse the .fsl/.fsy format during initial development; this dependency is removed once funlex/funyacc are self-hosting |
+| Existing fslex/fsyacc | Bootstrap phase 0 — compile the .funl/.funy inputs for funlex/funyacc themselves | You need fslex/fsyacc to parse the .funl/.funy format during initial development; this dependency is removed once funlex/funyacc are self-hosting |
 | LangThree interpreter/compiler (v1.8) | Run funlex and funyacc | The host for all .fun code execution |
 | fslit integration test suite | 641 tests | Primary correctness oracle — generated lexer+parser must pass all 641 existing tests |
 | F# unit tests (199 tests) | Secondary correctness oracle | Additional coverage |
@@ -104,8 +104,8 @@ No package installation required. These are pure algorithmic tools implemented i
 dotnet build   # uses existing fslex/fsyacc to compile the generators
 
 # Once funlex/funyacc are functional, run them on LangThree's own grammar:
-funlex Lexer.fsl -o Lexer.fun
-funyacc Parser.fsy -o Parser.fun
+funlex Lexer.funl -o Lexer.fun
+funyacc Parser.funy -o Parser.fun
 ```
 
 ## Alternatives Considered
@@ -125,7 +125,7 @@ funyacc Parser.fsy -o Parser.fun
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| PEG / Packrat parsing for funyacc | Out of scope per PROJECT.md; would break .fsy compatibility; fundamentally different semantics (no left recursion without memoization tricks) | LALR(1) |
+| PEG / Packrat parsing for funyacc | Out of scope per PROJECT.md; would break .funy compatibility; fundamentally different semantics (no left recursion without memoization tricks) | LALR(1) |
 | LL(k) / recursive descent parser generator | LangThree's grammar has left-recursive expressions and operator precedence; LL parsers require grammar rewriting that changes semantic actions | LALR(1) |
 | SLR(1) for lookahead computation | SLR uses global FOLLOW sets, not per-state lookaheads; produces more conflicts than LALR(1) on typical grammars; fsyacc uses LALR(1) and the replacement must match | LALR(1) with per-state lookaheads |
 | Unicode full 21-bit DFA tables | A 2D array[state][0x10FFFF] is 4M entries per state — impractical | Equivalence classes: group input bytes/chars into ~100 character classes, index by class rather than raw char code |
@@ -145,8 +145,8 @@ funyacc Parser.fsy -o Parser.fun
 - Reduces the transition table from [states × 256] to [states × n_classes] where n_classes is typically 50–100
 - fslex uses unicode equivalence classes internally; funlex should do the same
 
-**If the bootstrapping chicken-and-egg problem arises (funlex needs to lex .fsl, but funlex is written in .fsl/.fsy):**
-- Phase 0: write a hand-rolled .fsl/.fsy parser in LangThree (recursive descent is fine for the simple .fsl/.fsy grammar)
+**If the bootstrapping chicken-and-egg problem arises (funlex needs to lex .funl, but funlex is written in .funl/.funy):**
+- Phase 0: write a hand-rolled .funl/.funy parser in LangThree (recursive descent is fine for the simple .funl/.funy grammar)
 - Phase 1: once funlex/funyacc generate correct output, use them to regenerate their own parsers
 - Phase 2: remove the hand-rolled parsers; the tools are now fully self-hosting
 - This is the exact pattern used by Alex/Happy (Happy ships a parser-combinator-based bootstrap implementation) and OCaml's ocamlyacc
@@ -155,7 +155,7 @@ funyacc Parser.fsy -o Parser.fun
 
 | Tool | Language | What to Learn | Source |
 |------|----------|--------------|--------|
-| FsLexYacc | F# | Exact .fsl/.fsy format, runtime LexBuffer/tables structure, generated code layout | https://github.com/fsprojects/FsLexYacc |
+| FsLexYacc | F# | Exact .funl/.funy format, runtime LexBuffer/tables structure, generated code layout | https://github.com/fsprojects/FsLexYacc |
 | ocamllex / ocamlyacc | OCaml | DFA generation for lexer, LALR table generation, bootstrapping strategy | OCaml distribution source (`bytecomp/`, `parsing/`) |
 | Alex | Haskell | DFA generation with equivalence classes, bootstrap strategy (pre-generated Parser.hs/Scan.hs on Hackage) | https://github.com/haskell/alex |
 | Happy | Haskell | LALR(1) table construction in pure FP, bootstrap via parser-combinator fallback | https://github.com/haskell/happy |
@@ -169,17 +169,17 @@ funyacc Parser.fsy -o Parser.fun
 
 | Component | Compatibility Requirement | Notes |
 |-----------|--------------------------|-------|
-| .fsl input | Must match FsLexYacc's documented format | Unicode flag (`--unicode`) must be supported if LangThree's Lexer.fsl uses it |
-| .fsy input | Must match FsLexYacc's format including `%left`, `%right`, `%nonassoc`, `%token <type>`, `%type`, `%start` | Implement %nonassoc correctly (unlike fsyacc's known bug) |
+| .funl input | Must match FsLexYacc's documented format | Unicode flag (`--unicode`) must be supported if LangThree's Lexer.funl uses it |
+| .funy input | Must match FsLexYacc's format including `%left`, `%right`, `%nonassoc`, `%token <type>`, `%type`, `%start` | Implement %nonassoc correctly (unlike fsyacc's known bug) |
 | Generated .fun output | Must use LangThree v1.8 module syntax | Type-check against LangThree's type system; pattern match on token union type |
 | LALR table integers | No specific constraint | Use LangThree's native int for state indices and action codes |
 | Runtime LexBuffer equivalent | Must implement the same interface as FsLexYacc.Runtime.LexBuffer | The generated lexer functions take a buffer argument and return tokens |
 
 ## Sources
 
-- [FsLexYacc GitHub](https://github.com/fsprojects/FsLexYacc) — Format specification for .fsl/.fsy compatibility (HIGH confidence)
-- [FsLex format docs](https://github.com/fsprojects/FsLexYacc/blob/master/docs/content/fslex.md) — Complete .fsl regex syntax (HIGH confidence)
-- [FsYacc format docs](https://github.com/fsprojects/FsLexYacc/blob/master/docs/content/fsyacc.md) — .fsy token/type/rule syntax (MEDIUM confidence — incomplete documentation)
+- [FsLexYacc GitHub](https://github.com/fsprojects/FsLexYacc) — Format specification for .funl/.funy compatibility (HIGH confidence)
+- [FsLex format docs](https://github.com/fsprojects/FsLexYacc/blob/master/docs/content/fslex.md) — Complete .funl regex syntax (HIGH confidence)
+- [FsYacc format docs](https://github.com/fsprojects/FsLexYacc/blob/master/docs/content/fsyacc.md) — .funy token/type/rule syntax (MEDIUM confidence — incomplete documentation)
 - [FsLexYacc issue #39](https://github.com/fsprojects/FsLexYacc/issues/39) — %nonassoc bug in fsyacc (HIGH confidence — confirmed bug report)
 - [LALR parser Wikipedia](https://en.wikipedia.org/wiki/LALR_parser) — Algorithm overview including DeRemer/Pennello (HIGH confidence)
 - [LALR parser generator Wikipedia](https://en.wikipedia.org/wiki/LALR_parser_generator) — State construction, table building (HIGH confidence)

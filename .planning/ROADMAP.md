@@ -14,8 +14,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 1: Foundation** - Side-by-side test harness and project structure — bootstrapping safety before any generator code
 - [ ] **Phase 2: IndentFilter** - Port IndentFilter.fs to IndentFilter.fun — the fragile 7-context state machine, no generator dependencies
-- [ ] **Phase 3: funlex** - Full lexer generator: .fsl parsing, NFA/DFA construction, and .fun lexer emission
-- [ ] **Phase 4: funyacc Input** - .fsy format parsing into grammar AST — isolated from LALR algorithm complexity
+- [ ] **Phase 3: funlex** - Full lexer generator: .funl parsing, NFA/DFA construction, and .fun lexer emission
+- [ ] **Phase 4: funyacc Input** - .funy format parsing into grammar AST — isolated from LALR algorithm complexity
 - [ ] **Phase 5: funyacc LALR Core** - LR(0) items, LALR(1) lookahead propagation, action/goto table construction with conflict resolution
 - [ ] **Phase 6: funyacc Output** - Parser code emission: LALR tables + semantic actions + inline shift/reduce interpreter → Parser.fun
 - [ ] **Phase 7: Bootstrap** - Run 641 tests against generated pipeline; prove parity; cut over from F# to .fun
@@ -55,43 +55,43 @@ Plans:
 - [ ] 02-03: Integration against fslit tests via side-by-side harness
 
 ### Phase 3: funlex
-**Goal**: funlex accepts any .fsl file (including LangThree's Lexer.fsl) and emits a correct .fun lexer module with DFA-driven longest-match semantics
+**Goal**: funlex accepts any .funl file (including LangThree's Lexer.funl) and emits a correct .fun lexer module with DFA-driven longest-match semantics
 **Depends on**: Phase 1
 **Requirements**: FLEX-01, FLEX-02, FLEX-03, FLEX-04, FLEX-05, FLEX-06, CGEN-01
 **Success Criteria** (what must be TRUE):
-  1. funlex parses LangThree's Lexer.fsl without error, including verbatim F# action blocks extracted by brace-depth counting without parsing their contents
+  1. funlex parses LangThree's Lexer.funl without error, including verbatim F# action blocks extracted by brace-depth counting without parsing their contents
   2. The generated Lexer.fun tokenizes LangThree source files with token-for-token identical output to the F# Lexer.fs when run through the side-by-side harness
   3. Parameterized rules (block_comment, read_indent, read_string) with extra arguments are emitted correctly in the generated module
   4. The generated .fun module compiles and integrates with LangThree's module system without modification
 **Plans**: TBD
 
 Plans:
-- [ ] 03-01: FslParser — recursive descent parser for .fsl format, FslAst types, action block extraction
+- [ ] 03-01: FunlParser — recursive descent parser for .funl format, FunlAst types, action block extraction
 - [ ] 03-02: NfaBuild — Thompson's construction from regex AST to NFA
 - [ ] 03-03: DfaBuild — subset construction (NFA→DFA) and Hopcroft minimization
 - [ ] 03-04: LexEmit — serialize DFA as .fun source with transition table and longest-match driver; CGEN-01 module output format
 
 ### Phase 4: funyacc Input
-**Goal**: funyacc correctly parses LangThree's Parser.fsy into a typed grammar AST, handling all token declarations, precedence levels, grammar rules, and verbatim semantic action blocks
+**Goal**: funyacc correctly parses LangThree's Parser.funy into a typed grammar AST, handling all token declarations, precedence levels, grammar rules, and verbatim semantic action blocks
 **Depends on**: Phase 1
 **Requirements**: FYAC-01
 **Success Criteria** (what must be TRUE):
-  1. FsyParser.fun parses Parser.fsy without error and produces a typed grammar AST reflecting all ~40 token declarations, 10+ precedence levels, multiple start symbols, and all grammar productions
+  1. FunyParser.fun parses Parser.funy without error and produces a typed grammar AST reflecting all ~40 token declarations, 10+ precedence levels, multiple start symbols, and all grammar productions
   2. Embedded F# semantic action blocks are extracted verbatim by brace-depth counting without the parser attempting to interpret their contents
   3. The grammar AST accurately represents epsilon productions, multiple start symbols, and all %left/%right/%nonassoc declarations
 **Plans**: TBD
 
 Plans:
-- [ ] 04-01: FsyAst type definitions and FsyParser recursive descent implementation
-- [ ] 04-02: Precedence, start symbol, and type annotation handling; AST round-trip validation against Parser.fsy
+- [ ] 04-01: FunyAst type definitions and FunyParser recursive descent implementation
+- [ ] 04-02: Precedence, start symbol, and type annotation handling; AST round-trip validation against Parser.funy
 
 ### Phase 5: funyacc LALR Core
 **Goal**: The LALR(1) table builder generates correct action/goto tables for LangThree's grammar with zero conflicts, using DeRemer/Pennello lookahead propagation and full precedence resolution
 **Depends on**: Phase 4
 **Requirements**: FYAC-02, FYAC-03, FYAC-04
 **Success Criteria** (what must be TRUE):
-  1. LR(0) item set construction correctly computes closures including epsilon reachability for all nullable nonterminals in Parser.fsy
-  2. LALR(1) lookahead propagation produces tables that match fsyacc's output — zero spurious reduce/reduce conflicts on Parser.fsy
+  1. LR(0) item set construction correctly computes closures including epsilon reachability for all nullable nonterminals in Parser.funy
+  2. LALR(1) lookahead propagation produces tables that match fsyacc's output — zero spurious reduce/reduce conflicts on Parser.funy
   3. %left/%right/%nonassoc conflict resolution produces correct action table entries; %nonassoc produces error actions (not silent acceptance), matching fsyacc's behavior
   4. Both start symbols (start: Ast.Expr and parseModule: Ast.Module) are represented in the goto table with correct initial states
 **Plans**: TBD
@@ -107,7 +107,7 @@ Plans:
 **Requirements**: FYAC-05, CGEN-02, CGEN-03
 **Success Criteria** (what must be TRUE):
   1. The generated Parser.fun compiles as a LangThree module without modification
-  2. Semantic action blocks from Parser.fsy ($1, $2, $N references; parseState / IParseState; ruleSpan and symSpan helpers) are embedded correctly and compile without errors
+  2. Semantic action blocks from Parser.funy ($1, $2, $N references; parseState / IParseState; ruleSpan and symSpan helpers) are embedded correctly and compile without errors
   3. The inline shift/reduce interpreter in Parser.fun correctly drives the LALR tables through a stack-based parse without runtime dependency on funyacc
   4. Parser.fun produces AST output for at least one representative LangThree source file that can be compared to the F# parser's output
 **Plans**: TBD
@@ -121,14 +121,14 @@ Plans:
 **Depends on**: Phases 2, 3, 6
 **Requirements**: BOOT-01, BOOT-02, BOOT-03, TEST-02
 **Success Criteria** (what must be TRUE):
-  1. funlex processes Lexer.fsl and funyacc processes Parser.fsy without errors, producing Lexer.fun and Parser.fun
+  1. funlex processes Lexer.funl and funyacc processes Parser.funy without errors, producing Lexer.fun and Parser.fun
   2. All 641 tests (199 F# unit + 442 fslit integration) pass when run against the generated Lexer.fun + IndentFilter.fun + Parser.fun pipeline
   3. The generated pipeline produces byte-identical ASTs to the F# reference for every test input (verified by side-by-side harness from Phase 1)
   4. The LangThree build removes the FsLexYacc NuGet dependency and compiles without Lexer.fs/Parser.fs
 **Plans**: TBD
 
 Plans:
-- [ ] 07-01: End-to-end run: funlex on Lexer.fsl, funyacc on Parser.fsy, side-by-side 641-test validation
+- [ ] 07-01: End-to-end run: funlex on Lexer.funl, funyacc on Parser.funy, side-by-side 641-test validation
 - [ ] 07-02: Cutover — replace Lexer.fs/Parser.fs with .fun equivalents, remove FsLexYacc dependency, confirm 641 passing
 
 ## Progress

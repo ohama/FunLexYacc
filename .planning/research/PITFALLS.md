@@ -13,7 +13,7 @@
 **What goes wrong:**
 LALR(1) is constructed by merging LR(1) states that share the same LR(0) core. During lookahead propagation, the algorithm must correctly identify which lookaheads are spontaneously generated (derived from FIRST sets) versus which are propagated (inherited from predecessor items). A bug in this phase produces a table that is either more restrictive than it should be (spurious reduce-reduce conflicts) or more permissive (silently accepting invalid programs).
 
-The most common implementation bug: failing to include epsilon-reachable items in the closure. If item `A -> alpha . B beta` is in a set and `B -> . gamma` is in the closure, the lookaheads for `B -> . gamma` depend on `FIRST(beta)`. If `beta =>* epsilon`, then the lookaheads for `A ->` also propagate to `B -> . gamma`. Forgetting the epsilon case causes incomplete lookahead sets, producing spurious reduce-reduce conflicts that appear nowhere in the .fsy grammar.
+The most common implementation bug: failing to include epsilon-reachable items in the closure. If item `A -> alpha . B beta` is in a set and `B -> . gamma` is in the closure, the lookaheads for `B -> . gamma` depend on `FIRST(beta)`. If `beta =>* epsilon`, then the lookaheads for `A ->` also propagate to `B -> . gamma`. Forgetting the epsilon case causes incomplete lookahead sets, producing spurious reduce-reduce conflicts that appear nowhere in the .funy grammar.
 
 **Why it happens:**
 Implementers often treat the closure operation as simple BFS over items without correctly threading the epsilon reachability check. The Dragon Book algorithm is correct but has subtle index-off-by-one errors when translated from pseudocode.
@@ -21,7 +21,7 @@ Implementers often treat the closure operation as simple BFS over items without 
 **How to avoid:**
 Implement closure incrementally with a worklist. For each item `A -> alpha . B beta, LA`, compute `FIRST(beta LA)` (not just `FIRST(beta)`) as the lookahead set added to all `B -> . gamma` items. Test each nonterminal for nullability before skipping the outer lookahead.
 
-Build a regression test: take the actual LangThree Parser.fsy and verify the generated table has zero conflicts. Parser.fsy is known to parse cleanly under fsyacc; any conflict in the funyacc-generated table is a bug.
+Build a regression test: take the actual LangThree Parser.funy and verify the generated table has zero conflicts. Parser.funy is known to parse cleanly under fsyacc; any conflict in the funyacc-generated table is a bug.
 
 **Warning signs:**
 - Any reduce-reduce conflict on a grammar that fsyacc accepts cleanly
@@ -87,18 +87,18 @@ Define the filter's output as a deterministic function of `(token_stream, config
 
 ---
 
-### Pitfall 4: .fsl/.fsy Compatibility — Embedded F# Code Blocks
+### Pitfall 4: .funl/.funy Compatibility — Embedded F# Code Blocks
 
 **What goes wrong:**
-The .fsl and .fsy formats embed arbitrary F# code in `{ ... }` header blocks and in semantic actions (`{ $1 }`, `{ Let($2, $4, $6) }`). These code blocks contain F# syntax, not LangThree syntax. A funlex/funyacc parser that tries to parse these blocks as LangThree will fail on valid .fsl/.fsy files.
+The .funl and .funy formats embed arbitrary F# code in `{ ... }` header blocks and in semantic actions (`{ $1 }`, `{ Let($2, $4, $6) }`). These code blocks contain F# syntax, not LangThree syntax. A funlex/funyacc parser that tries to parse these blocks as LangThree will fail on valid .funl/.funy files.
 
-More specifically: the Lexer.fsl opens with a `{ ... }` block containing F# module opens and helper functions. The Parser.fsy opens with a `%{ ... %}` block. These must be treated as opaque strings — extracted and emitted verbatim into the output, not parsed.
+More specifically: the Lexer.funl opens with a `{ ... }` block containing F# module opens and helper functions. The Parser.funy opens with a `%{ ... %}` block. These must be treated as opaque strings — extracted and emitted verbatim into the output, not parsed.
 
 **Why it happens:**
 It is tempting to parse semantic action blocks to validate or transform them. This is unnecessary for the compatibility goal and breaks immediately on F# syntax that LangThree cannot understand.
 
 **How to avoid:**
-Define a clear boundary: funlex/funyacc parses the structural directives (patterns, token names, rule names, precedence) and treats all `{ ... }` action code as opaque lexed strings. The lexer for .fsl/.fsy must count curly-brace depth to correctly delimit action blocks without parsing their contents. Test specifically with LangThree's actual Lexer.fsl (which has complex F# helpers in the header) to verify verbatim passthrough.
+Define a clear boundary: funlex/funyacc parses the structural directives (patterns, token names, rule names, precedence) and treats all `{ ... }` action code as opaque lexed strings. The lexer for .funl/.funy must count curly-brace depth to correctly delimit action blocks without parsing their contents. Test specifically with LangThree's actual Lexer.funl (which has complex F# helpers in the header) to verify verbatim passthrough.
 
 **Warning signs:**
 - Trying to validate or "understand" semantic action code
@@ -112,7 +112,7 @@ Define a clear boundary: funlex/funyacc parses the structural directives (patter
 ### Pitfall 5: Grammar Ambiguity Introduced by INDENT/DEDENT Injection
 
 **What goes wrong:**
-The existing Parser.fsy grammar is written assuming the IndentFilter has already preprocessed the token stream. It contains production rules like:
+The existing Parser.funy grammar is written assuming the IndentFilter has already preprocessed the token stream. It contains production rules like:
 ```
 | LET IDENT EQUALS INDENT Expr DEDENT
 | LET IDENT EQUALS INDENT Expr DEDENT IN Expr
@@ -123,7 +123,7 @@ These rely on INDENT/DEDENT being injected at exactly the right positions. If th
 This is distinct from a grammar conflict: the grammar itself is unambiguous given correct INDENT/DEDENT placement. The problem is behavioral — the filter's output must precisely match what the grammar expects.
 
 **Why it happens:**
-When reimplementing IndentFilter in LangThree, developers test with simple inputs (single let bindings) and miss complex cases. The Parser.fsy grammar has 8 different production rules that mix INDENT/DEDENT with other tokens. Each one has a specific token sequence expectation.
+When reimplementing IndentFilter in LangThree, developers test with simple inputs (single let bindings) and miss complex cases. The Parser.funy grammar has 8 different production rules that mix INDENT/DEDENT with other tokens. Each one has a specific token sequence expectation.
 
 **How to avoid:**
 Before porting IndentFilter, document each grammar production that consumes INDENT/DEDENT and the exact token sequence it expects. Write unit tests at the token level (input: `LET IDENT EQUALS NEWLINE(4) IDENT`, expected output after filter: `LET IDENT EQUALS INDENT IDENT DEDENT`). These token-level tests are independent of the full parser and catch filter bugs before running 641 end-to-end tests.
@@ -140,7 +140,7 @@ Before porting IndentFilter, document each grammar production that consumes INDE
 ### Pitfall 6: LALR(1) Cannot Handle the Grammar — Silent Conflicts Resolved Wrong
 
 **What goes wrong:**
-Fsyacc resolves shift-reduce conflicts silently using precedence declarations or default resolution (shift preferred). If funyacc does not implement the same conflict resolution strategy, it will produce a different parse table for the same grammar, causing behavioral differences even when there are no "errors." The existing Parser.fsy uses `%left`, `%right`, `%nonassoc` declarations for 15+ precedence levels. These are not just annotations — they directly determine which action is chosen in conflict states.
+Fsyacc resolves shift-reduce conflicts silently using precedence declarations or default resolution (shift preferred). If funyacc does not implement the same conflict resolution strategy, it will produce a different parse table for the same grammar, causing behavioral differences even when there are no "errors." The existing Parser.funy uses `%left`, `%right`, `%nonassoc` declarations for 15+ precedence levels. These are not just annotations — they directly determine which action is chosen in conflict states.
 
 A funyacc that ignores precedence declarations and always shifts will parse arithmetic correctly (shift is right for left-recursive operators) but will fail on `%nonassoc` uses like comparisons (`1 < 2 < 3` should be a parse error but may become `(1 < 2) < 3`).
 
@@ -150,7 +150,7 @@ Precedence-based conflict resolution is a non-trivial post-processing step on th
 **How to avoid:**
 Implement precedence and associativity resolution as a required step, not an optional optimization. After generating the raw LALR(1) action table, any remaining shift-reduce conflict must be resolved by comparing the precedence of the production (determined by its rightmost terminal) with the precedence of the lookahead token. Implement `%nonassoc` as "neither shift nor reduce — generate an error action."
 
-Verify by comparing the action table generated by funyacc against the reference fsyacc table for Parser.fsy (fsyacc can emit a verbose debug output with `--log`).
+Verify by comparing the action table generated by funyacc against the reference fsyacc table for Parser.funy (fsyacc can emit a verbose debug output with `--log`).
 
 **Warning signs:**
 - Chained comparison `1 < 2 < 3` not producing a parse error
@@ -165,7 +165,7 @@ Verify by comparing the action table generated by funyacc against the reference 
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Hardcode IndentFilter config (4 spaces, non-strict) | Simpler implementation | Cannot handle alternative indent widths in .fsl/.fsy files | Acceptable for Phase 1 if documented |
+| Hardcode IndentFilter config (4 spaces, non-strict) | Simpler implementation | Cannot handle alternative indent widths in .funl/.funy files | Acceptable for Phase 1 if documented |
 | Skip LALR table serialization (regenerate from grammar each run) | Avoid file I/O complexity | Generator runs on every LangThree startup (slow) | Never — table must be cached or precomputed |
 | Use LangThree's runtime hashtables for LALR goto/action tables | Simple to implement | Table lookup performance degrades for large grammars | Acceptable initially, profile before optimizing |
 | Skip conflict warnings, always silently resolve | Faster iteration | Hidden grammar bugs; cannot detect when grammar changes break assumptions | Never — emit warnings even in MVP |
@@ -177,8 +177,8 @@ Verify by comparing the action table generated by funyacc against the reference 
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| .fsl regex dialect | Assuming standard POSIX regex — .fsl uses its own precedence hierarchy (# for set difference, \* + ? for repetition, concatenation, then |) | Parse .fsl regex syntax explicitly; do not use a general regex engine for the .fsl meta-format itself |
-| .fsy semantic actions | Parsing `{ ... }` blocks as LangThree code | Lex action blocks by counting curly brace depth; emit verbatim |
+| .funl regex dialect | Assuming standard POSIX regex — .funl uses its own precedence hierarchy (# for set difference, \* + ? for repetition, concatenation, then |) | Parse .funl regex syntax explicitly; do not use a general regex engine for the .funl meta-format itself |
+| .funy semantic actions | Parsing `{ ... }` blocks as LangThree code | Lex action blocks by counting curly brace depth; emit verbatim |
 | fsyacc `%type` declarations | Omitting `%type` annotations on non-start nonterminals | `%type` is optional in fsyacc but funyacc should validate that `%start` symbols have `%type` |
 | LangThree module system | Generating a flat .fun file when the module system expects `module Lexer = ...` wrapper | Generated files must use LangThree's module declaration syntax |
 | NEWLINE token with column payload | Treating NEWLINE as a unit token | `NEWLINE col` carries an integer column; the filter consumes it, the parser never sees it |
@@ -190,7 +190,7 @@ Verify by comparing the action table generated by funyacc against the reference 
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Building LALR item sets as immutable F# lists | Generator takes minutes on LangThree's grammar | Use sets or sorted arrays; LangThree's grammar has ~400+ items across ~200 states | During development — LangThree Parser.fsy is not trivial |
+| Building LALR item sets as immutable F# lists | Generator takes minutes on LangThree's grammar | Use sets or sorted arrays; LangThree's grammar has ~400+ items across ~200 states | During development — LangThree Parser.funy is not trivial |
 | Re-running closure from scratch for every state | Exponential behavior during state construction | Memoize closure computation; use worklist algorithm | Any grammar with more than ~50 productions |
 | Token-stream-as-list in IndentFilter | Materializing entire token list before filtering begins | The IndentFilter.fs already uses list-based lookahead but requires only 1 token lookahead; port should use seq with limited lookahead | Large source files with thousands of tokens |
 | Tree-walking evaluator for LALR table construction | funyacc itself is slow because LangThree is interpreted | Acceptable — table generation is a one-time cost per grammar, not per file parsed. Do not prematurely optimize | Only a problem if table construction exceeds ~10 seconds, which requires a very large grammar |
@@ -203,10 +203,10 @@ Verify by comparing the action table generated by funyacc against the reference 
 - [ ] **IndentFilter: single-line match** — `match x with | A -> 1 | B -> 2` (all on one line) must NOT push `InMatch` context. The `JustSawMatch` flag must be consumed by seeing PIPE on the same line before any NEWLINE.
 - [ ] **LALR: epsilon productions** — Productions with empty right-hand sides (`|  { [] }`) require correct FIRST/FOLLOW computation. Verify `TypeParams`, `TypeDeclContinuation`, `Decls` (epsilon alternatives) parse correctly.
 - [ ] **LALR: reduce-reduce resolution** — If two reductions are possible, funyacc must pick the one that appears first in the grammar file (same as fsyacc default). Document this behavior explicitly.
-- [ ] **funlex output: unicode vs byte** — LangThree's existing Lexer.fsl uses `LexBuffer<char>` (unicode). Generated funlex output must match — do not silently switch to byte mode.
-- [ ] **funyacc output: `$n` references** — Semantic actions in .fsy reference `$1`, `$2`, etc. Verify the generated LangThree code maps these to the correct pattern variables in the match expression, accounting for 1-based indexing.
+- [ ] **funlex output: unicode vs byte** — LangThree's existing Lexer.funl uses `LexBuffer<char>` (unicode). Generated funlex output must match — do not silently switch to byte mode.
+- [ ] **funyacc output: `$n` references** — Semantic actions in .funy reference `$1`, `$2`, etc. Verify the generated LangThree code maps these to the correct pattern variables in the match expression, accounting for 1-based indexing.
 - [ ] **641 tests: all categories** — Do not only run the `expr/` and `file/let/` tests. The `file/module/`, `file/exception/`, `file/offside/`, `file/implicit-in/`, and `file/match/` categories exercise IndentFilter's most complex paths.
-- [ ] **Block comments** — The Lexer.fsl handles nested `(* ... *)` comments with a depth counter. The generated lexer must replicate this; shallow comment handling fails on `(* (* nested *) *)`.
+- [ ] **Block comments** — The Lexer.funl handles nested `(* ... *)` comments with a depth counter. The generated lexer must replicate this; shallow comment handling fails on `(* (* nested *) *)`.
 
 ---
 
@@ -217,8 +217,8 @@ Verify by comparing the action table generated by funyacc against the reference 
 | Lookahead propagation bug discovered after LALR table complete | HIGH | Rewrite closure/propagation; re-run all state construction from scratch |
 | IndentFilter rewrite produces wrong token stream | MEDIUM | Roll back to mechanical port; add token-level unit tests before re-attempting idiomatic rewrite |
 | Premature cutover broke LangThree pipeline | HIGH | `git checkout` F# reference files; re-run all 641 tests to confirm rollback; do not proceed until side-by-side parity is proven |
-| .fsl/.fsy compatibility break (action code not verbatim) | MEDIUM | Add brace-depth lexer mode; re-scan .fsl/.fsy with corrected parser |
-| Precedence resolution wrong | MEDIUM | Re-implement resolution step; compare against fsyacc verbose log for Parser.fsy |
+| .funl/.funy compatibility break (action code not verbatim) | MEDIUM | Add brace-depth lexer mode; re-scan .funl/.funy with corrected parser |
+| Precedence resolution wrong | MEDIUM | Re-implement resolution step; compare against fsyacc verbose log for Parser.funy |
 
 ---
 
@@ -226,10 +226,10 @@ Verify by comparing the action table generated by funyacc against the reference 
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Lookahead propagation bugs | LALR(1) core algorithm | Zero conflicts on Parser.fsy; matches fsyacc action table |
+| Lookahead propagation bugs | LALR(1) core algorithm | Zero conflicts on Parser.funy; matches fsyacc action table |
 | Bootstrapping chicken-and-egg | Architecture design (Phase 1) | Side-by-side test harness exists before any code generation |
 | IndentFilter context stack | IndentFilter port | All 30+ offside/implicit-in tests pass at token level |
-| .fsl/.fsy action code verbatim | Parser for .fsl/.fsy format | Lexer.fsl header block emitted verbatim in output |
+| .funl/.funy action code verbatim | Parser for .funl/.funy format | Lexer.funl header block emitted verbatim in output |
 | INDENT/DEDENT injection mismatch | IndentFilter + integration | All 442 fslit tests pass |
 | LALR conflict resolution | LALR table generation | `%nonassoc` comparisons produce parse errors on chained ops |
 
@@ -241,11 +241,11 @@ Verify by comparing the action table generated by funyacc against the reference 
 - [LR Parsing — Rahul Gopinath](https://rahul.gopinath.org/post/2024/07/01/lr-parsing/) — practical LR(0)/SLR/LALR/LR(1) implementation walkthrough
 - [Mysterious Conflicts — GNU Bison Manual](https://www.gnu.org/software/bison/manual/html_node/Mysterious-Conflicts.html) — reduce-reduce conflicts from state merging
 - [Python Lexical Analysis — Python Docs](https://docs.python.org/3/reference/lexical_analysis.html) — authoritative INDENT/DEDENT specification including parenthesis suspension and empty line rules
-- [FsLex Overview](https://fsprojects.github.io/FsLexYacc/content/fslex.html) — .fsl format rules, EOF limitation, longest-match behavior
-- [FsYacc Documentation](https://github.com/fsprojects/FsLexYacc/blob/master/docs/content/fsyacc.md) — .fsy format, `%type` requirements, position tracking requirement
+- [FsLex Overview](https://fsprojects.github.io/FsLexYacc/content/fslex.html) — .funl format rules, EOF limitation, longest-match behavior
+- [FsYacc Documentation](https://github.com/fsprojects/FsLexYacc/blob/master/docs/content/fsyacc.md) — .funy format, `%type` requirements, position tracking requirement
 - [Bootstrapping (compilers) — Wikipedia](https://en.wikipedia.org/wiki/Bootstrapping_(compilers)) — staged development and double-compilation verification strategies
 - [Principled Parsing for Indentation-Sensitive Languages](https://michaeldadams.org/papers/layout_parsing/LayoutParsing.pdf) — formal treatment of layout rules and edge cases
-- LangThree source — `IndentFilter.fs`, `Lexer.fsl`, `Parser.fsy`, 641 integration tests (direct inspection)
+- LangThree source — `IndentFilter.fs`, `Lexer.funl`, `Parser.funy`, 641 integration tests (direct inspection)
 
 ---
 *Pitfalls research for: lexer/parser generator bootstrapping (funlex/funyacc for LangThree)*

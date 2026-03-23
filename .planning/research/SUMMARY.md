@@ -7,7 +7,7 @@
 
 ## Executive Summary
 
-FunLexYacc is a bootstrapping project: write funlex (a lexer generator) and funyacc (a parser generator) in LangThree (.fun), then use them to regenerate LangThree's own Lexer.fun and Parser.fun, replacing the existing F# implementations. This is the classic staged bootstrapping pattern used by Alex/Happy, ocamllex/ocamlyacc, and Menhir. The key constraint is strict format compatibility — the tools must consume LangThree's existing Lexer.fsl and Parser.fsy files without modification and produce output that passes all 641 existing integration tests.
+FunLexYacc is a bootstrapping project: write funlex (a lexer generator) and funyacc (a parser generator) in LangThree (.fun), then use them to regenerate LangThree's own Lexer.fun and Parser.fun, replacing the existing F# implementations. This is the classic staged bootstrapping pattern used by Alex/Happy, ocamllex/ocamlyacc, and Menhir. The key constraint is strict format compatibility — the tools must consume LangThree's existing Lexer.funl and Parser.funy files without modification and produce output that passes all 641 existing integration tests.
 
 The algorithm choices are well-established and non-negotiable: Thompson's NFA construction followed by subset construction and Hopcroft minimization for funlex; LALR(1) via DeRemer/Pennello lookahead propagation for funyacc. The implementation language (LangThree) imposes no unusual constraints — the standard library provides Maps, Sets, and list operations sufficient for all required data structures. No external dependencies are needed. The highest-confidence reference implementation for format compatibility is FsLexYacc itself; for clean LALR(1) implementation, Lemon (SQLite's parser generator) is ~5,000 lines of well-commented C.
 
@@ -17,9 +17,9 @@ The dominant risks are algorithmic correctness (LALR(1) lookahead propagation bu
 
 ### Recommended Stack
 
-Both tools are pure algorithmic implementations in LangThree with zero external dependencies. The algorithm pipeline for funlex is: parse .fsl → Thompson's NFA → subset construction (NFA→DFA) → Hopcroft minimization → emit DFA transition table as .fun source. The pipeline for funyacc is: parse .fsy → compute FIRST sets → construct LR(0) item sets → LALR(1) lookahead propagation (DeRemer/Pennello) → build action/goto tables → resolve conflicts via %left/%right/%nonassoc → emit .fun source. Output format is always LangThree source text, never binary tables.
+Both tools are pure algorithmic implementations in LangThree with zero external dependencies. The algorithm pipeline for funlex is: parse .funl → Thompson's NFA → subset construction (NFA→DFA) → Hopcroft minimization → emit DFA transition table as .fun source. The pipeline for funyacc is: parse .funy → compute FIRST sets → construct LR(0) item sets → LALR(1) lookahead propagation (DeRemer/Pennello) → build action/goto tables → resolve conflicts via %left/%right/%nonassoc → emit .fun source. Output format is always LangThree source text, never binary tables.
 
-The bootstrap phase is managed with a hand-written recursive descent parser for .fsl/.fsy during Phase 0; once funlex/funyacc can process their own grammars, the hand-written parsers are replaced. This is the exact strategy used by Alex (which ships pre-generated Parser.hs) and Happy (which uses a parser-combinator bootstrap).
+The bootstrap phase is managed with a hand-written recursive descent parser for .funl/.funy during Phase 0; once funlex/funyacc can process their own grammars, the hand-written parsers are replaced. This is the exact strategy used by Alex (which ships pre-generated Parser.hs) and Happy (which uses a parser-combinator bootstrap).
 
 **Core technologies:**
 - LALR(1) via DeRemer/Pennello (1982): parser table generation — matches fsyacc's algorithm exactly, sufficient for LangThree's grammar
@@ -27,22 +27,22 @@ The bootstrap phase is managed with a hand-written recursive descent parser for 
 - Powerset/subset construction: NFA-to-DFA — standard, tractable for token-level regexes
 - Hopcroft's partition refinement: DFA minimization — O(n log n), reduces table size, optional for v1
 - LangThree standard Map/Set: all set-based computations — built-in, no external deps
-- .fsl/.fsy input format: FsLexYacc-compatible — non-negotiable constraint
+- .funl/.funy input format: FsLexYacc-compatible — non-negotiable constraint
 - .fun module output: LangThree module system — non-negotiable constraint
 
 ### Expected Features
 
-Features are driven entirely by what LangThree's actual Lexer.fsl and Parser.fsy exercise. Everything in the table-stakes list is directly observed in those files. The indentation system is handled by a separate IndentFilter pipeline stage (not by funlex/funyacc), which transforms NEWLINE(col) tokens into INDENT/DEDENT tokens.
+Features are driven entirely by what LangThree's actual Lexer.funl and Parser.funy exercise. Everything in the table-stakes list is directly observed in those files. The indentation system is handled by a separate IndentFilter pipeline stage (not by funlex/funyacc), which transforms NEWLINE(col) tokens into INDENT/DEDENT tokens.
 
 **Must have (table stakes for bootstrapping):**
 
 funlex:
-- Named regex definitions (`let ident = regexp`) — used throughout Lexer.fsl
+- Named regex definitions (`let ident = regexp`) — used throughout Lexer.funl
 - Character class literals, ranges, union, negation — foundational
 - Quantifiers `*`, `+`, `?` — used in every named regex
 - String and character literal patterns — all keywords and operators
 - `eof` special pattern — terminal rule requirement
-- Multiple named rules via `and` — four separate rules in Lexer.fsl
+- Multiple named rules via `and` — four separate rules in Lexer.funl
 - Parameterized rules (state threading via extra args) — block_comment, read_indent, read_string
 - Longest-match + first-match-wins semantics — critical for multi-char operator disambiguation
 - `lexbuf` implicit last argument and `LexBuffer<_>` position mutation — line tracking
@@ -55,7 +55,7 @@ funyacc:
 - `parseState` / `IParseState` in actions (source span tracking) — ruleSpan, symSpan helpers
 - LALR(1) table generation with conflict resolution via precedence — core requirement
 - Empty productions (epsilon rules) — TypeParams, TypeDeclContinuation, etc.
-- INDENT/DEDENT as normal tokens in grammar rules — 62+ occurrences in Parser.fsy
+- INDENT/DEDENT as normal tokens in grammar rules — 62+ occurrences in Parser.funy
 
 **Should have (P2 — add after bootstrapping validation):**
 - Conflict reporting (`-v` verbose output with state/token info) — grammar debugging
@@ -71,26 +71,26 @@ funyacc:
 
 The architecture follows the canonical two-phase generator pattern: parse spec → build automaton/tables → emit source. Both funlex and funyacc are file-in/file-out CLI tools. The generated .fun modules are self-contained and have no runtime dependency on the generator. IndentFilter is a standalone port of the existing F# module — it is not generated, it is shipped as handwritten .fun code alongside the generators.
 
-The recommended build order is driven by dependency: IndentFilter first (no deps, testable immediately), then funlex (FslParser → NFA → DFA → LexEmit), then funyacc (FsyParser → LrItems → Lookahead → Tables → ParserEmit), then end-to-end bootstrap validation.
+The recommended build order is driven by dependency: IndentFilter first (no deps, testable immediately), then funlex (FunlParser → NFA → DFA → LexEmit), then funyacc (FunyParser → LrItems → Lookahead → Tables → ParserEmit), then end-to-end bootstrap validation.
 
 **Major components:**
-1. FslParser — parse .fsl spec into typed AST (hand-written recursive descent)
+1. FunlParser — parse .funl spec into typed AST (hand-written recursive descent)
 2. NfaBuild + DfaBuild — Thompson's construction then subset/Hopcroft (core lexer algorithm)
 3. LexEmit — serialize DFA as .fun source (template generation, one state per line)
-4. FsyParser — parse .fsy spec into grammar AST (hand-written recursive descent)
+4. FunyParser — parse .funy spec into grammar AST (hand-written recursive descent)
 5. LrItems + Lookahead + Tables — LR(0) items, LALR(1) lookahead propagation, action/goto tables with conflict resolution
 6. ParserEmit — serialize tables + semantic actions as .fun source
 7. IndentFilter.fun — port of IndentFilter.fs; NEWLINE(col) → INDENT/DEDENT/IN stateful fold
 
 ### Critical Pitfalls
 
-1. **LALR(1) lookahead propagation bugs** — Forgetting epsilon reachability in closure produces spurious reduce-reduce conflicts that look like grammar problems. Prevention: implement closure with `FIRST(beta LA)` not just `FIRST(beta)`, test all LangThree nullability cases. Verification: zero conflicts on Parser.fsy.
+1. **LALR(1) lookahead propagation bugs** — Forgetting epsilon reachability in closure produces spurious reduce-reduce conflicts that look like grammar problems. Prevention: implement closure with `FIRST(beta LA)` not just `FIRST(beta)`, test all LangThree nullability cases. Verification: zero conflicts on Parser.funy.
 
 2. **Premature bootstrapping cutover** — Copying generated files into the LangThree pipeline before 100% test parity destroys the test harness needed to debug. Prevention: mandatory side-by-side comparison phase before any cutover; never proceed below 641 passing tests.
 
 3. **IndentFilter context stack reconstruction** — The 7-context stack (TopLevel, InMatch, InTry, InFunctionApp, InLetDecl, InExprBlock, InModule) has intricate edge cases. Prevention: port mechanically one-for-one before any refactoring; write token-level unit tests for each grammar production consuming INDENT/DEDENT.
 
-4. **Embedded F# action code verbatim passthrough** — `{ ... }` blocks in .fsl/.fsy contain F# syntax, not LangThree. Prevention: lex action blocks by counting brace depth, never parse contents. Test with Lexer.fsl's complex header block.
+4. **Embedded F# action code verbatim passthrough** — `{ ... }` blocks in .funl/.funy contain F# syntax, not LangThree. Prevention: lex action blocks by counting brace depth, never parse contents. Test with Lexer.funl's complex header block.
 
 5. **LALR conflict resolution incompleteness** — Implementing LALR table generation without precedence resolution means `%nonassoc` comparisons silently parse wrong. Prevention: implement precedence resolution as required step, verify `%nonassoc` produces error actions, compare against fsyacc verbose output.
 
@@ -110,14 +110,14 @@ Based on research, the dependency graph drives a clear 9-phase structure. The ar
 **Implements:** Architecture component: IndentFilter (Pattern 4: pure stream transformer)
 **Avoids:** IndentFilter context stack reconstruction bugs (Pitfall 3); INDENT/DEDENT injection mismatch (Pitfall 5)
 
-### Phase 3: funlex Input Parsing (FslParser)
-**Rationale:** FslParser depends only on LangThree itself. It produces the typed FslAst that all downstream NFA/DFA work depends on. Starting here allows validating .fsl format handling (including verbatim action block passthrough) before writing algorithmic code.
-**Delivers:** FslParser.fun that parses Lexer.fsl and prints a correct typed AST; FslAst.fun module
+### Phase 3: funlex Input Parsing (FunlParser)
+**Rationale:** FunlParser depends only on LangThree itself. It produces the typed FunlAst that all downstream NFA/DFA work depends on. Starting here allows validating .funl format handling (including verbatim action block passthrough) before writing algorithmic code.
+**Delivers:** FunlParser.fun that parses Lexer.funl and prints a correct typed AST; FunlAst.fun module
 **Uses:** Hand-written recursive descent (no external dependencies)
 **Avoids:** Embedded F# action code parsing (Pitfall 4)
 
 ### Phase 4: funlex Automaton (NFA + DFA)
-**Rationale:** With FslParser complete, the NFA and DFA builders can be developed and tested in isolation against small known-correct regex inputs before touching LangThree's actual Lexer.fsl.
+**Rationale:** With FunlParser complete, the NFA and DFA builders can be developed and tested in isolation against small known-correct regex inputs before touching LangThree's actual Lexer.funl.
 **Delivers:** NfaBuild.fun (Thompson's construction) + DfaBuild.fun (subset construction + optional Hopcroft minimization)
 **Uses:** LALR(1) algorithm pipeline for lexer: regex AST → NFA → DFA → transition table
 **Implements:** Architecture components: NFA Builder, DFA Builder (Patterns 1 and 2)
@@ -128,15 +128,15 @@ Based on research, the dependency graph drives a clear 9-phase structure. The ar
 **Addresses:** Longest-match + first-match semantics; NEWLINE(col) with column payload; LexBuffer position mutation
 **Implements:** Architecture component: Lexer Code Emitter (Pattern 2: DFA-as-data, emitter-as-template)
 
-### Phase 6: funyacc Input Parsing (FsyParser)
-**Rationale:** Mirrors Phase 3 for the parser side. FsyParser depends only on LangThree. Completing it separately allows validating .fsy format handling before writing the complex LALR algorithm.
-**Delivers:** FsyParser.fun that parses Parser.fsy and prints a correct grammar AST; FsyAst.fun module
+### Phase 6: funyacc Input Parsing (FunyParser)
+**Rationale:** Mirrors Phase 3 for the parser side. FunyParser depends only on LangThree. Completing it separately allows validating .funy format handling before writing the complex LALR algorithm.
+**Delivers:** FunyParser.fun that parses Parser.funy and prints a correct grammar AST; FunyAst.fun module
 **Uses:** Hand-written recursive descent; brace-depth action block extraction
 **Avoids:** Embedded F# action code parsing (Pitfall 4); grammar normalization skipping (Architecture Anti-Pattern 5)
 
 ### Phase 7: funyacc LALR(1) Core (LrItems + Lookahead + Tables)
-**Rationale:** This is the highest-algorithmic-complexity phase. Must be developed with continuous verification against Parser.fsy — any deviation from fsyacc's table produces behavioral differences. Develop LrItems, Lookahead, and Tables as separately testable sub-components per the architecture's module boundary design.
-**Delivers:** LrItems.fun, Lookahead.fun, Tables.fun with correct LALR(1) action/goto tables for LangThree's grammar; zero conflicts on Parser.fsy; precedence resolution for %left/%right/%nonassoc including correct %nonassoc semantics
+**Rationale:** This is the highest-algorithmic-complexity phase. Must be developed with continuous verification against Parser.funy — any deviation from fsyacc's table produces behavioral differences. Develop LrItems, Lookahead, and Tables as separately testable sub-components per the architecture's module boundary design.
+**Delivers:** LrItems.fun, Lookahead.fun, Tables.fun with correct LALR(1) action/goto tables for LangThree's grammar; zero conflicts on Parser.funy; precedence resolution for %left/%right/%nonassoc including correct %nonassoc semantics
 **Uses:** DeRemer/Pennello (1982) LALR(1) lookahead propagation
 **Avoids:** Lookahead propagation bugs (Pitfall 1); silent conflict resolution (Pitfall 6)
 
@@ -154,10 +154,10 @@ Based on research, the dependency graph drives a clear 9-phase structure. The ar
 ### Phase Ordering Rationale
 
 - IndentFilter before generators: zero dependencies, highest fragility, exercises the most tests — de-risk it first
-- FslParser before NFA/DFA: clean boundaries; parsing bugs are easier to fix than algorithmic bugs mixed together
+- FunlParser before NFA/DFA: clean boundaries; parsing bugs are easier to fix than algorithmic bugs mixed together
 - funlex before funyacc: lexer algorithm (Thompson's + subset) is simpler than LALR; getting end-to-end lexer output validates the code generation infrastructure before the harder parser phase
-- FsyParser before LALR core: same isolation principle as funlex; grammar bugs surface before table-construction bugs
-- Tables split into LrItems + Lookahead + Tables: each is independently testable on toy grammars before running against Parser.fsy
+- FunyParser before LALR core: same isolation principle as funlex; grammar bugs surface before table-construction bugs
+- Tables split into LrItems + Lookahead + Tables: each is independently testable on toy grammars before running against Parser.funy
 - Cutover only after 100% parity: mandated by Pitfall 2; no exceptions
 
 ### Research Flags
@@ -167,7 +167,7 @@ Phases likely needing deeper research during planning:
 - **Phase 2 (IndentFilter):** The 7-context state machine has edge cases not visible in the source code. Recommend mapping every context transition against all 30+ offside/implicit-in test cases before writing code.
 
 Phases with standard patterns (deeper research not needed):
-- **Phase 3 and Phase 6 (FslParser, FsyParser):** Hand-written recursive descent for simple DSLs is well-documented. FsLexYacc docs provide complete format specification.
+- **Phase 3 and Phase 6 (FunlParser, FunyParser):** Hand-written recursive descent for simple DSLs is well-documented. FsLexYacc docs provide complete format specification.
 - **Phase 4 (NFA/DFA):** Thompson's construction and subset construction are textbook algorithms with multiple reference implementations (Alex, ocamllex). No research phase needed.
 - **Phase 5 and Phase 8 (LexEmit, ParserEmit):** Code generation is template string construction. No research needed beyond studying the structure of existing generated Parser.fs.
 
@@ -176,7 +176,7 @@ Phases with standard patterns (deeper research not needed):
 | Area | Confidence | Notes |
 |------|------------|-------|
 | Stack | HIGH | All algorithm choices verified against FsLexYacc docs, DeRemer/Pennello paper, and multiple reference implementations. Zero ambiguity. |
-| Features | HIGH | Based on direct inspection of Lexer.fsl, Parser.fsy, and IndentFilter.fs — not documentation inference. Feature list is ground-truth. |
+| Features | HIGH | Based on direct inspection of Lexer.funl, Parser.funy, and IndentFilter.fs — not documentation inference. Feature list is ground-truth. |
 | Architecture | HIGH | Component boundaries and build order derived from actual dependency graph. Matches established patterns in FsLexYacc, Alex, Happy. |
 | Pitfalls | HIGH | Pitfalls derived from known FsLexYacc bugs (issue #39), LALR algorithm known failure modes, and direct analysis of IndentFilter's complexity. Not speculation. |
 
@@ -184,15 +184,15 @@ Phases with standard patterns (deeper research not needed):
 
 ### Gaps to Address
 
-- **fsyacc `%type` on non-start nonterminals:** FsLexYacc documentation is incomplete on whether `%type` is required for all nonterminals or only start symbols. Research noted this as MEDIUM confidence. During FsyParser implementation, validate against fsyacc's actual behavior with Parser.fsy.
+- **fsyacc `%type` on non-start nonterminals:** FsLexYacc documentation is incomplete on whether `%type` is required for all nonterminals or only start symbols. Research noted this as MEDIUM confidence. During FunyParser implementation, validate against fsyacc's actual behavior with Parser.fsy.
 - **LangThree v1.8 module syntax details:** Generated .fun files must use correct LangThree module declaration syntax. If module syntax has evolved, generated output may not compile. Verify against current LangThree source before writing LexEmit/ParserEmit.
-- **DFA state explosion in Hopcroft minimization:** For v1, Hopcroft minimization is optional. If the unminimized DFA for Lexer.fsl exceeds a tractable state count, equivalence classes (grouping chars with identical transitions) must be added. This is unlikely given the grammar size but should be monitored.
+- **DFA state explosion in Hopcroft minimization:** For v1, Hopcroft minimization is optional. If the unminimized DFA for Lexer.funl exceeds a tractable state count, equivalence classes (grouping chars with identical transitions) must be added. This is unlikely given the grammar size but should be monitored.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- LangThree/src/LangThree/Lexer.fsl — direct inspection, all funlex feature requirements
-- LangThree/src/LangThree/Parser.fsy — direct inspection, all funyacc feature requirements
+- LangThree/src/LangThree/Lexer.funl — direct inspection, all funlex feature requirements
+- LangThree/src/LangThree/Parser.funy — direct inspection, all funyacc feature requirements
 - LangThree/src/LangThree/IndentFilter.fs — direct inspection, IndentFilter architecture
 - LangThree/src/LangThree/Parser.fs — direct inspection, generated parser structure reference
 - [FsLexYacc GitHub](https://github.com/fsprojects/FsLexYacc) — format specification
